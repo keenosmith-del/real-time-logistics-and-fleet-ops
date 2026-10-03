@@ -1,0 +1,913 @@
+{
+  "apiVersion": "v1",
+  "kind": "Namespace",
+  "metadata": {
+    "name": "fleet-ops"
+  }
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "Secret",
+  "metadata": {
+    "name": "fleet-secrets",
+    "namespace": "fleet-ops"
+  },
+  "type": "Opaque",
+  "stringData": {
+    "postgres-password": "fleet",
+    "database-url": "postgres://fleet:fleet@postgres:5432/fleet?sslmode=disable",
+    "grafana-password": "fleet-demo"
+  }
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "postgres",
+    "namespace": "fleet-ops"
+  },
+  "spec": {
+    "selector": {
+      "app": "postgres"
+    },
+    "ports": [
+      {
+        "port": 5432,
+        "targetPort": 5432,
+        "name": "service"
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "redis",
+    "namespace": "fleet-ops"
+  },
+  "spec": {
+    "selector": {
+      "app": "redis"
+    },
+    "ports": [
+      {
+        "port": 6379,
+        "targetPort": 6379,
+        "name": "service"
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "redpanda",
+    "namespace": "fleet-ops"
+  },
+  "spec": {
+    "selector": {
+      "app": "redpanda"
+    },
+    "ports": [
+      {
+        "port": 9092,
+        "targetPort": 9092,
+        "name": "service"
+      },
+      {
+        "port": 9644,
+        "targetPort": 9644,
+        "name": "admin"
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "backend",
+    "namespace": "fleet-ops"
+  },
+  "spec": {
+    "selector": {
+      "app": "backend"
+    },
+    "ports": [
+      {
+        "port": 8080,
+        "targetPort": 8080,
+        "name": "http"
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "frontend",
+    "namespace": "fleet-ops"
+  },
+  "spec": {
+    "selector": {
+      "app": "frontend"
+    },
+    "ports": [
+      {
+        "port": 80,
+        "targetPort": 80,
+        "name": "http"
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "prometheus",
+    "namespace": "fleet-ops"
+  },
+  "spec": {
+    "selector": {
+      "app": "prometheus"
+    },
+    "ports": [
+      {
+        "port": 9090,
+        "targetPort": 9090,
+        "name": "http"
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "grafana",
+    "namespace": "fleet-ops"
+  },
+  "spec": {
+    "selector": {
+      "app": "grafana"
+    },
+    "ports": [
+      {
+        "port": 3000,
+        "targetPort": 3000,
+        "name": "http"
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "apps/v1",
+  "kind": "StatefulSet",
+  "metadata": {
+    "name": "postgres",
+    "namespace": "fleet-ops"
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "postgres"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "postgres"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "postgres",
+            "image": "timescale/timescaledb:2.19.3-pg17",
+            "ports": [
+              {
+                "containerPort": 5432
+              }
+            ],
+            "resources": {
+              "requests": {
+                "cpu": "100m",
+                "memory": "128Mi"
+              },
+              "limits": {
+                "cpu": "2",
+                "memory": "2Gi"
+              }
+            },
+            "env": [
+              {
+                "name": "POSTGRES_USER",
+                "value": "fleet"
+              },
+              {
+                "name": "POSTGRES_DB",
+                "value": "fleet"
+              },
+              {
+                "name": "POSTGRES_PASSWORD",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "name": "fleet-secrets",
+                    "key": "postgres-password"
+                  }
+                }
+              }
+            ],
+            "volumeMounts": [
+              {
+                "name": "data",
+                "mountPath": "/var/lib/postgresql/data",
+                "subPath": "postgres"
+              }
+            ],
+            "readinessProbe": {
+              "exec": {
+                "command": [
+                  "pg_isready",
+                  "-U",
+                  "fleet",
+                  "-d",
+                  "fleet"
+                ]
+              },
+              "initialDelaySeconds": 10,
+              "periodSeconds": 5
+            },
+            "livenessProbe": {
+              "exec": {
+                "command": [
+                  "pg_isready",
+                  "-U",
+                  "fleet",
+                  "-d",
+                  "fleet"
+                ]
+              },
+              "initialDelaySeconds": 60,
+              "periodSeconds": 20
+            }
+          }
+        ],
+        "terminationGracePeriodSeconds": 30
+      }
+    },
+    "serviceName": "postgres",
+    "volumeClaimTemplates": [
+      {
+        "metadata": {
+          "name": "data"
+        },
+        "spec": {
+          "accessModes": [
+            "ReadWriteOnce"
+          ],
+          "resources": {
+            "requests": {
+              "storage": "10Gi"
+            }
+          }
+        }
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "apps/v1",
+  "kind": "StatefulSet",
+  "metadata": {
+    "name": "redis",
+    "namespace": "fleet-ops"
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "redis"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "redis"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "redis",
+            "image": "redis:7.4-alpine",
+            "ports": [
+              {
+                "containerPort": 6379
+              }
+            ],
+            "resources": {
+              "requests": {
+                "cpu": "100m",
+                "memory": "128Mi"
+              },
+              "limits": {
+                "cpu": "2",
+                "memory": "2Gi"
+              }
+            },
+            "args": [
+              "redis-server",
+              "--appendonly",
+              "yes"
+            ],
+            "volumeMounts": [
+              {
+                "name": "data",
+                "mountPath": "/data"
+              }
+            ],
+            "readinessProbe": {
+              "exec": {
+                "command": [
+                  "redis-cli",
+                  "ping"
+                ]
+              },
+              "initialDelaySeconds": 10,
+              "periodSeconds": 5
+            },
+            "livenessProbe": {
+              "exec": {
+                "command": [
+                  "redis-cli",
+                  "ping"
+                ]
+              },
+              "initialDelaySeconds": 60,
+              "periodSeconds": 20
+            }
+          }
+        ],
+        "terminationGracePeriodSeconds": 30
+      }
+    },
+    "serviceName": "redis",
+    "volumeClaimTemplates": [
+      {
+        "metadata": {
+          "name": "data"
+        },
+        "spec": {
+          "accessModes": [
+            "ReadWriteOnce"
+          ],
+          "resources": {
+            "requests": {
+              "storage": "10Gi"
+            }
+          }
+        }
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "apps/v1",
+  "kind": "StatefulSet",
+  "metadata": {
+    "name": "redpanda",
+    "namespace": "fleet-ops"
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "redpanda"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "redpanda"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "redpanda",
+            "image": "redpandadata/redpanda:v25.1.7",
+            "ports": [
+              {
+                "containerPort": 9092
+              }
+            ],
+            "resources": {
+              "requests": {
+                "cpu": "100m",
+                "memory": "128Mi"
+              },
+              "limits": {
+                "cpu": "2",
+                "memory": "2Gi"
+              }
+            },
+            "args": [
+              "redpanda",
+              "start",
+              "--smp=1",
+              "--memory=1G",
+              "--reserve-memory=0M",
+              "--overprovisioned",
+              "--node-id=0",
+              "--check=false",
+              "--kafka-addr=0.0.0.0:9092",
+              "--advertise-kafka-addr=redpanda:9092",
+              "--rpc-addr=0.0.0.0:33145",
+              "--advertise-rpc-addr=redpanda:33145"
+            ],
+            "volumeMounts": [
+              {
+                "name": "data",
+                "mountPath": "/var/lib/redpanda/data"
+              }
+            ],
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/v1/status/ready",
+                "port": 9644
+              },
+              "initialDelaySeconds": 10,
+              "periodSeconds": 5
+            },
+            "livenessProbe": {
+              "httpGet": {
+                "path": "/v1/status/ready",
+                "port": 9644
+              },
+              "initialDelaySeconds": 60,
+              "periodSeconds": 20
+            }
+          }
+        ],
+        "terminationGracePeriodSeconds": 30,
+        "securityContext": {
+          "fsGroup": 101
+        }
+      }
+    },
+    "serviceName": "redpanda",
+    "volumeClaimTemplates": [
+      {
+        "metadata": {
+          "name": "data"
+        },
+        "spec": {
+          "accessModes": [
+            "ReadWriteOnce"
+          ],
+          "resources": {
+            "requests": {
+              "storage": "10Gi"
+            }
+          }
+        }
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "name": "backend",
+    "namespace": "fleet-ops"
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "backend"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "backend"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "backend",
+            "image": "fleet-operations-backend:local",
+            "ports": [
+              {
+                "containerPort": 8080
+              }
+            ],
+            "resources": {
+              "requests": {
+                "cpu": "100m",
+                "memory": "128Mi"
+              },
+              "limits": {
+                "cpu": "2",
+                "memory": "2Gi"
+              }
+            },
+            "env": [
+              {
+                "name": "DATABASE_URL",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "name": "fleet-secrets",
+                    "key": "database-url"
+                  }
+                }
+              },
+              {
+                "name": "REDIS_ADDR",
+                "value": "redis:6379"
+              },
+              {
+                "name": "KAFKA_BROKER",
+                "value": "redpanda:9092"
+              },
+              {
+                "name": "AUTO_SEED",
+                "value": "true"
+              },
+              {
+                "name": "CORS_ORIGIN",
+                "value": "http://localhost:5173"
+              }
+            ],
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/api/health",
+                "port": 8080
+              },
+              "initialDelaySeconds": 10,
+              "periodSeconds": 5
+            },
+            "livenessProbe": {
+              "httpGet": {
+                "path": "/api/health",
+                "port": 8080
+              },
+              "initialDelaySeconds": 60,
+              "periodSeconds": 20
+            }
+          }
+        ],
+        "terminationGracePeriodSeconds": 30
+      }
+    },
+    "strategy": {
+      "type": "Recreate"
+    }
+  }
+}
+---
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "name": "frontend",
+    "namespace": "fleet-ops"
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "frontend"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "frontend"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "frontend",
+            "image": "fleet-operations-frontend:local",
+            "ports": [
+              {
+                "containerPort": 80
+              }
+            ],
+            "resources": {
+              "requests": {
+                "cpu": "100m",
+                "memory": "128Mi"
+              },
+              "limits": {
+                "cpu": "2",
+                "memory": "2Gi"
+              }
+            },
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/",
+                "port": 80
+              },
+              "initialDelaySeconds": 10,
+              "periodSeconds": 5
+            },
+            "livenessProbe": {
+              "httpGet": {
+                "path": "/",
+                "port": 80
+              },
+              "initialDelaySeconds": 60,
+              "periodSeconds": 20
+            }
+          }
+        ],
+        "terminationGracePeriodSeconds": 30
+      }
+    },
+    "strategy": {
+      "type": "Recreate"
+    }
+  }
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "ConfigMap",
+  "metadata": {
+    "name": "prometheus-config",
+    "namespace": "fleet-ops"
+  },
+  "data": {
+    "prometheus.yml": "global:\n  scrape_interval: 5s\nscrape_configs:\n  - job_name: fleet-backend\n    static_configs:\n      - targets: ['backend:8080']\n  - job_name: redpanda\n    metrics_path: /public_metrics\n    static_configs:\n      - targets: ['redpanda:9644']\n"
+  }
+}
+---
+{
+  "apiVersion": "apps/v1",
+  "kind": "StatefulSet",
+  "metadata": {
+    "name": "prometheus",
+    "namespace": "fleet-ops"
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "prometheus"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "prometheus"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "prometheus",
+            "image": "prom/prometheus:v3.4.1",
+            "ports": [
+              {
+                "containerPort": 9090
+              }
+            ],
+            "resources": {
+              "requests": {
+                "cpu": "100m",
+                "memory": "128Mi"
+              },
+              "limits": {
+                "cpu": "2",
+                "memory": "2Gi"
+              }
+            },
+            "args": [
+              "--config.file=/etc/prometheus/prometheus.yml",
+              "--storage.tsdb.path=/data"
+            ],
+            "volumeMounts": [
+              {
+                "name": "config",
+                "mountPath": "/etc/prometheus"
+              },
+              {
+                "name": "data",
+                "mountPath": "/data"
+              }
+            ],
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/-/ready",
+                "port": 9090
+              },
+              "initialDelaySeconds": 10,
+              "periodSeconds": 5
+            },
+            "livenessProbe": {
+              "httpGet": {
+                "path": "/-/ready",
+                "port": 9090
+              },
+              "initialDelaySeconds": 60,
+              "periodSeconds": 20
+            }
+          }
+        ],
+        "terminationGracePeriodSeconds": 30,
+        "volumes": [
+          {
+            "name": "config",
+            "configMap": {
+              "name": "prometheus-config"
+            }
+          }
+        ],
+        "securityContext": {
+          "fsGroup": 65534
+        }
+      }
+    },
+    "serviceName": "prometheus",
+    "volumeClaimTemplates": [
+      {
+        "metadata": {
+          "name": "data"
+        },
+        "spec": {
+          "accessModes": [
+            "ReadWriteOnce"
+          ],
+          "resources": {
+            "requests": {
+              "storage": "10Gi"
+            }
+          }
+        }
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "ConfigMap",
+  "metadata": {
+    "name": "grafana-config",
+    "namespace": "fleet-ops"
+  },
+  "data": {
+    "datasources.yml": "apiVersion: 1\ndatasources:\n  - name: Prometheus\n    uid: prometheus\n    type: prometheus\n    access: proxy\n    url: http://prometheus:9090\n    isDefault: true\n",
+    "dashboards.yml": "apiVersion: 1\nproviders:\n  - name: Fleet Operations\n    type: file\n    options:\n      path: /var/lib/grafana/dashboards\n",
+    "fleet.json": "{\n  \"uid\": \"fleet-operations\",\n  \"title\": \"Fleet Operations Intelligence\",\n  \"schemaVersion\": 40,\n  \"version\": 1,\n  \"refresh\": \"5s\",\n  \"time\": {\n    \"from\": \"now-30m\",\n    \"to\": \"now\"\n  },\n  \"panels\": [\n    {\n      \"id\": 1,\n      \"title\": \"Telemetry processing / sec\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 0,\n        \"w\": 12,\n        \"h\": 8\n      },\n      \"targets\": [\n        {\n          \"expr\": \"sum by (consumer) (rate(fleet_events_total{result=\\\"processed\\\"}[1m]))\",\n          \"refId\": \"A\",\n          \"legendFormat\": \"{{consumer}} {{job}}\"\n        }\n      ]\n    },\n    {\n      \"id\": 2,\n      \"title\": \"Processing latency p95\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 12,\n        \"y\": 0,\n        \"w\": 12,\n        \"h\": 8\n      },\n      \"targets\": [\n        {\n          \"expr\": \"histogram_quantile(0.95, sum by (le) (rate(fleet_processing_seconds_bucket[1m])))\",\n          \"refId\": \"A\",\n          \"legendFormat\": \"{{consumer}} {{job}}\"\n        }\n      ]\n    },\n    {\n      \"id\": 3,\n      \"title\": \"Consumer lag\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 8,\n        \"w\": 12,\n        \"h\": 8\n      },\n      \"targets\": [\n        {\n          \"expr\": \"fleet_consumer_lag\",\n          \"refId\": \"A\",\n          \"legendFormat\": \"{{consumer}} {{job}}\"\n        }\n      ]\n    },\n    {\n      \"id\": 4,\n      \"title\": \"Retries / sec\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 12,\n        \"y\": 8,\n        \"w\": 12,\n        \"h\": 8\n      },\n      \"targets\": [\n        {\n          \"expr\": \"sum by (consumer) (rate(fleet_events_total{result=\\\"retry\\\"}[1m]))\",\n          \"refId\": \"A\",\n          \"legendFormat\": \"{{consumer}} {{job}}\"\n        }\n      ]\n    },\n    {\n      \"id\": 5,\n      \"title\": \"Service health\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 16,\n        \"w\": 12,\n        \"h\": 8\n      },\n      \"targets\": [\n        {\n          \"expr\": \"up\",\n          \"refId\": \"A\",\n          \"legendFormat\": \"{{consumer}} {{job}}\"\n        }\n      ]\n    },\n    {\n      \"id\": 6,\n      \"title\": \"Go goroutines\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 12,\n        \"y\": 16,\n        \"w\": 12,\n        \"h\": 8\n      },\n      \"targets\": [\n        {\n          \"expr\": \"go_goroutines\",\n          \"refId\": \"A\",\n          \"legendFormat\": \"{{consumer}} {{job}}\"\n        }\n      ]\n    },\n    {\n      \"id\": 7,\n      \"title\": \"Active vehicles\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 24,\n        \"w\": 12,\n        \"h\": 8\n      },\n      \"targets\": [\n        {\n          \"expr\": \"fleet_active_vehicles\",\n          \"refId\": \"A\"\n        }\n      ]\n    },\n    {\n      \"id\": 8,\n      \"title\": \"Completed deliveries\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 12,\n        \"y\": 24,\n        \"w\": 12,\n        \"h\": 8\n      },\n      \"targets\": [\n        {\n          \"expr\": \"fleet_completed_deliveries\",\n          \"refId\": \"A\"\n        }\n      ]\n    },\n    {\n      \"id\": 9,\n      \"title\": \"Delayed deliveries\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 32,\n        \"w\": 12,\n        \"h\": 8\n      },\n      \"targets\": [\n        {\n          \"expr\": \"fleet_delayed_deliveries\",\n          \"refId\": \"A\"\n        }\n      ]\n    },\n    {\n      \"id\": 10,\n      \"title\": \"Active exceptions\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 12,\n        \"y\": 32,\n        \"w\": 12,\n        \"h\": 8\n      },\n      \"targets\": [\n        {\n          \"expr\": \"fleet_active_exceptions\",\n          \"refId\": \"A\"\n        }\n      ]\n    }\n  ]\n}\n"
+  }
+}
+---
+{
+  "apiVersion": "apps/v1",
+  "kind": "StatefulSet",
+  "metadata": {
+    "name": "grafana",
+    "namespace": "fleet-ops"
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "grafana"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "grafana"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "grafana",
+            "image": "grafana/grafana:12.0.1",
+            "ports": [
+              {
+                "containerPort": 3000
+              }
+            ],
+            "resources": {
+              "requests": {
+                "cpu": "100m",
+                "memory": "128Mi"
+              },
+              "limits": {
+                "cpu": "2",
+                "memory": "2Gi"
+              }
+            },
+            "env": [
+              {
+                "name": "GF_SECURITY_ADMIN_PASSWORD",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "name": "fleet-secrets",
+                    "key": "grafana-password"
+                  }
+                }
+              }
+            ],
+            "volumeMounts": [
+              {
+                "name": "data",
+                "mountPath": "/var/lib/grafana"
+              },
+              {
+                "name": "config",
+                "mountPath": "/etc/grafana/provisioning/datasources/datasources.yml",
+                "subPath": "datasources.yml"
+              },
+              {
+                "name": "config",
+                "mountPath": "/etc/grafana/provisioning/dashboards/dashboards.yml",
+                "subPath": "dashboards.yml"
+              },
+              {
+                "name": "config",
+                "mountPath": "/var/lib/grafana/dashboards/fleet.json",
+                "subPath": "fleet.json"
+              }
+            ],
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/api/health",
+                "port": 3000
+              },
+              "initialDelaySeconds": 10,
+              "periodSeconds": 5
+            },
+            "livenessProbe": {
+              "httpGet": {
+                "path": "/api/health",
+                "port": 3000
+              },
+              "initialDelaySeconds": 60,
+              "periodSeconds": 20
+            }
+          }
+        ],
+        "terminationGracePeriodSeconds": 30,
+        "volumes": [
+          {
+            "name": "config",
+            "configMap": {
+              "name": "grafana-config"
+            }
+          }
+        ],
+        "securityContext": {
+          "fsGroup": 472
+        }
+      }
+    },
+    "serviceName": "grafana",
+    "volumeClaimTemplates": [
+      {
+        "metadata": {
+          "name": "data"
+        },
+        "spec": {
+          "accessModes": [
+            "ReadWriteOnce"
+          ],
+          "resources": {
+            "requests": {
+              "storage": "10Gi"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

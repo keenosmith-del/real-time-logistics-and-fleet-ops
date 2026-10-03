@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+backend/fleet
+coverage/
+frontend/public/vendor/
+backend/server
+*.tsbuildinfo

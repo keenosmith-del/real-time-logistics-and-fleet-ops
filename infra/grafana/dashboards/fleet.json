@@ -1,0 +1,229 @@
+{
+  "uid": "fleet-operations",
+  "title": "Fleet Operations Intelligence",
+  "schemaVersion": 40,
+  "version": 1,
+  "refresh": "5s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Telemetry processing / sec",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (consumer) (rate(fleet_events_total{result=\"processed\"}[1m]))",
+          "refId": "A",
+          "legendFormat": "{{consumer}} {{job}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Processing latency p95",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(fleet_processing_seconds_bucket[1m])))",
+          "refId": "A",
+          "legendFormat": "{{consumer}} {{job}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Consumer lag",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "fleet_consumer_lag",
+          "refId": "A",
+          "legendFormat": "{{consumer}} {{job}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Retries / sec",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (consumer) (rate(fleet_events_total{result=\"retry\"}[1m]))",
+          "refId": "A",
+          "legendFormat": "{{consumer}} {{job}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Service health",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "up",
+          "refId": "A",
+          "legendFormat": "{{consumer}} {{job}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Go goroutines",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "go_goroutines",
+          "refId": "A",
+          "legendFormat": "{{consumer}} {{job}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Active vehicles",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "fleet_active_vehicles",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Completed deliveries",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "fleet_completed_deliveries",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Delayed deliveries",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "fleet_delayed_deliveries",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Active exceptions",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "fleet_active_exceptions",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}
